@@ -34,19 +34,6 @@ define cluster_tasks
         end
 end
 
-define tasks
-        set var $croot = (uClusterDL *)uKernelModule::globalClusters.root
-        set var $ccurr = $croot
-        printf "%-20s %-18s\n", "name", "address"
-        while 1
-            printf "%-20s %18p\n", $ccurr.cluster_.name, &$ccurr.cluster_
-            cluster_tasks &$ccurr.cluster_
-            set var $ccurr = (uClusterDL *)$ccurr.next
-            if $ccurr == $croot
-                loop_break
-                end
-        end
-
 define cluster_procs
         set var $proot = (uProcessorDL *)((uCluster *)$arg0)->processorsOnCluster.root
         if $proot != 0
@@ -183,7 +170,7 @@ define pushtask
         set var $xfp = (*(UPP::uMachContext::uContext_t *)((uBaseTask *)$arg0)->context).FP
         set var $xpc = uSwitch+28
         # must be at frame 0 to set pc register, now on assembler frame
-        select-frame 0
+        frame 0
         # push sp, fp, pc into global variables
         printf "Push sp, fp, pc into global variables\n"
         eval "set $__sp%d = $sp", $stack
