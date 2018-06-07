@@ -47,49 +47,6 @@ define tasks
                 end
         end
 
-define cluster_task_state
-        set var $ar = 0x83c990
-        #set var $ar = 0x780200
-        # get the list of tasks from a particular cluster given a cluster's address
-        # (arg0)
-        set var $root = (uBaseTaskDL *)((uCluster *)$ar)->tasksOnCluster.root
-        if $root != 0
-            set var $currNode = $root
-            printf "%20s %18s %20s\n", "name", "address", "state"
-            while 1
-                printf "%20s %18p", $currNode.task_.name, &$currNode.task_
-                # print like this because it's an enum
-                echo \t
-                output $currNode.task_.state
-                echo \n
-                #if ($currNode.task_.state != uBaseTask::Halt && $currNode.task_.state == uBaseTask::Blocked)
-                if ($currNode.task_.state == uBaseTask::Blocked)
-                    set var $task = $currNode.task_
-                    set var $context = (UPP::uMachContext::uContext_t *)$task.context
-                    set var $xsp = $context->SP
-                    set var $xfp = $context->FP
-                    set var $xbase = $task.base
-                    set var $xpc = &uSwitch + 28
-                    p/x "FP: ", $xfp
-                    p/x "SP: ", $xsp
-                    p/x "PC: ", $xpc
-                    # change to a new frame
-                    #f $xbase
-                    #bt
-                    #info f $xsp
-                    info f $xsp $xpc
-                    # setup the stack pointer and start stack walking
-                end
-                set var $currNode = (uBaseTaskDL *)$currNode.next
-                if $currNode == $root
-                    loop_break
-                end
-            end
-        else
-            printf "no tasks"
-        end
-end
-
 define cluster_procs
         set var $proot = (uProcessorDL *)((uCluster *)$arg0)->processorsOnCluster.root
         if $proot != 0
