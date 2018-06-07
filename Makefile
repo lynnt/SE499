@@ -1,4 +1,4 @@
 lint:
 	python3 -m pylint *.py
 type:
-	pyre --source-directory . check
+	pyre -l .pyre_configuration --source-directory . check
