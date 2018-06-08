@@ -5,7 +5,7 @@ set var $stack = 0
 define clusters
         set var $croot = (uClusterDL *)uKernelModule::globalClusters.root
         set var $ccurr = $croot
-        printf "%-20s %-18s\n", "name", "address"
+        printf "%-20s %-18s\n", "Name", "Address"
         while 1
             printf "%-20s %18p\n", $ccurr.cluster_.name, &$ccurr.cluster_
             set var $ccurr = (uClusterDL *)$ccurr.next
@@ -19,9 +19,10 @@ define cluster_tasks
         set var $troot = (uBaseTaskDL *)((uCluster *)$arg0)->tasksOnCluster.root
         if $troot != 0
             set var $tcurr = $troot
-            printf "%-20s %-18s %-20s\n", "name", "address", "state"
+            #printf "\t%-20s %-18s %-20s\n", "Task Name", "Address", "State"
             while 1
-                printf "%-20s %18p ", $tcurr.task_.name, &$tcurr.task_
+                printf "\t%-20s %18p ", $tcurr.task_.name, &$tcurr.task_
+                printf "%-10s", ""
                 output $tcurr.task_.state
                 echo \n
                 set var $tcurr = (uBaseTaskDL *)$tcurr.next
@@ -54,14 +55,15 @@ end
 define tasks
         set var $croot = (uClusterDL *)uKernelModule::globalClusters.root
         set var $ccurr = $croot
+        printf "%-20s %18s\n", "ClusterName", "Address"
         while 1
                 printf "%-20s %18p\n", $ccurr.cluster_.name, &$ccurr.cluster_
                 cluster_tasks &$ccurr.cluster_
-                echo \n
                 set var $ccurr = (uClusterDL *)$ccurr.next
-            if $ccurr == $croot
-                        loop_break
-                        end
+                if $ccurr == $croot
+                    loop_break
+                end
+                echo \n
         end
 end
 
@@ -79,6 +81,47 @@ define events
                 end
         else
                 printf "no events"
+        end
+end
+
+define pushtask
+        printf "Switching stack .... \n"
+        # push stack
+        set $stack++
+        # set values while on a C++ stack frame
+        set var $xsp = (*(UPP::uMachContext::uContext_t *)((uBaseTask *)$arg0)->context).SP+48
+        set var $xfp = (*(UPP::uMachContext::uContext_t *)((uBaseTask *)$arg0)->context).FP
+        set var $xpc = uSwitch+28
+        # must be at frame 0 to set pc register, now on assembler frame
+        select-frame 0
+        # push sp, fp, pc into global variables
+        printf "Push sp, fp, pc into global variables\n"
+        eval "set $__sp%d = $sp", $stack
+        eval "set $__fp%d = $fp", $stack
+        eval "set $__pc%d = $pc", $stack
+        # now update registers for new task
+        printf "Update registers for new task\n"
+        set $rsp = $xsp
+        set $rbp = $xfp
+        set $pc = $xpc
+        # must be at C++ frame to access C++ variables (uSwitch is assembler)
+        frame 1
+end
+
+define poptask
+        if $stack != 0
+                # must be at frame 0 to set pc register
+                select-frame 0
+                # pop sp, fp, pc from global variables
+                eval "set $pc = $__pc%d", $stack
+                eval "set $rbp = $__fp%d", $stack
+                eval "set $sp = $__sp%d", $stack
+                # pop stack
+                set $stack--
+                # must be at C++ frame to access C++ variables (uSwitch is assembler)
+                frame 1
+        else
+                printf "empty stack\n"
         end
 end
 
@@ -159,45 +202,4 @@ define walk-386-stack
                 set var $nsp = *(void ***)($xsp)
         end
         printf "\n"
-end
-
-define pushtask
-        printf "Switching stack .... \n"
-        # push stack
-        set $stack++
-        # set values while on a C++ stack frame
-        set var $xsp = (*(UPP::uMachContext::uContext_t *)((uBaseTask *)$arg0)->context).SP+48
-        set var $xfp = (*(UPP::uMachContext::uContext_t *)((uBaseTask *)$arg0)->context).FP
-        set var $xpc = uSwitch+28
-        # must be at frame 0 to set pc register, now on assembler frame
-        frame 0
-        # push sp, fp, pc into global variables
-        printf "Push sp, fp, pc into global variables\n"
-        eval "set $__sp%d = $sp", $stack
-        eval "set $__fp%d = $fp", $stack
-        eval "set $__pc%d = $pc", $stack
-        # now update registers for new task
-        printf "Update registers for new task\n"
-        set $rsp = $xsp
-        set $rbp = $xfp
-        set $pc = $xpc
-        # must be at C++ frame to access C++ variables (uSwitch is assembler)
-        frame 1
-end
-
-define poptask
-        if $stack != 0
-                # must be at frame 0 to set pc register
-                select-frame 0
-                # pop sp, fp, pc from global variables
-                eval "set $pc = $__pc%d", $stack
-                eval "set $rbp = $__fp%d", $stack
-                eval "set $sp = $__sp%d", $stack
-                # pop stack
-                set $stack--
-                # must be at C++ frame to access C++ variables (uSwitch is assembler)
-                frame 1
-        else
-                printf "empty stack\n"
-        end
 end
