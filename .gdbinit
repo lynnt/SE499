@@ -5,7 +5,7 @@ set var $stack = 0
 define clusters
         set var $croot = (uClusterDL *)uKernelModule::globalClusters.root
         set var $ccurr = $croot
-        printf "%-20s %-18s\n", "Name", "Address"
+        printf "%-20s %18s\n", "Name", "Address"
         while 1
             printf "%-20s %18p\n", $ccurr.cluster_.name, &$ccurr.cluster_
             set var $ccurr = (uClusterDL *)$ccurr.next
@@ -39,7 +39,7 @@ define cluster_procs
         set var $proot = (uProcessorDL *)((uCluster *)$arg0)->processorsOnCluster.root
         if $proot != 0
                 set var $pcurr = $proot
-                printf "%-18s %-20s %-20s %-20s\n", "address", "pid", "preemption", "spin"
+                printf "%-18s %-20s %-20s %-20s\n", "Address", "Pid", "Preemption", "Spin"
                 while 1
                         printf "%18p %-20d %-20d %-20d\n", &$pcurr.processor_, $pcurr.processor_.pid, $pcurr.processor_.preemption, $pcurr.processor_.spin
                         set var $pcurr = (uProcessorDL *)$pcurr.next
@@ -71,7 +71,7 @@ define events
         set var $eroot = uProcessor::events.eventlist.root
         if $eroot != 0
                 set var $ecurr = $eroot
-                printf "%-18s %-20s %-20s %-18s %-20s %-18s %-20s\n", "address", "alarm", "period", "task", "name", "handler", "locked"
+                printf "%-18s %-20s %-20s %-18s %-20s %-18s %-20s\n", "Address", "Alarm", "Period", "Task", "Name", "Handler", "Locked"
                 while 1
                         printf "%18p %20lld %20lld %18p %-20s %18p %20d\n", $ecurr, $ecurr.alarm.tv, $ecurr.period.tv, $ecurr.task, $ecurr.task.name, $ecurr.sigHandler, $ecurr.executeLocked
                         set var $ecurr = (uEventNode *)$ecurr.next
