@@ -2,6 +2,7 @@ handle SIGALRM nostop noprint pass
 handle SIGUSR1 nostop noprint pass
 set var $stack = 0
 
+# display the list of available clusters
 define clusters
         set var $croot = (uClusterDL *)uKernelModule::globalClusters.root
         set var $ccurr = $croot
@@ -15,6 +16,8 @@ define clusters
         end
 end
 
+# display the list of info about all available tasks on a particular cluster
+# $arg0 = address of the cluster you want to examine the list of tasks
 define cluster_tasks
         set var $troot = (uBaseTaskDL *)((uCluster *)$arg0)->tasksOnCluster.root
         if $troot != 0
@@ -84,8 +87,43 @@ define events
         end
 end
 
+# $arg0: the task ID in the current cluster. ID is zero-indexed
+define pushtaskid
+    set var $taskID = $arg0
+    set var $currCluster = &uThisCluster()
+    printf "Current cluster: %s\n", $currCluster.name
+
+    set var $troot = (uBaseTaskDL *)((uCluster*)$currCluster)->tasksOnCluster.root
+    if $troot != 0
+        set var $tcurr = $troot
+        set var $currID = 0
+        set var $taskAddr = 0
+        while 1
+            set var $tcurr = (uBaseTaskDL *)$tcurr.next
+            if $tcurr == $troot
+                loop_break
+            end
+
+            if $currID == $taskID
+                set $taskAddr = &$tcurr.task_
+                loop_break
+            end
+            set $currID = $currID + 1
+        end
+
+        if $currID < $taskID
+            printf "Can't find task ID: %d. Only have %d tasks", $taskID, $currID
+        else
+            pushtask $taskAddr
+        end
+    else
+        printf "No Tasks"
+    end
+end
+
+# $arg0: address of the task you want to switch to
 define pushtask
-        printf "Switching stack .... \n"
+        printf "Switching to stack ... \n"
         # push stack
         set $stack++
         # set values while on a C++ stack frame
