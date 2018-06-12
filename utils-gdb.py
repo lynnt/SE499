@@ -1,3 +1,7 @@
+"""
+To run this extension, the python name has to be as same as one of the loaded library
+Additionally, the file must exist in a folder which is in gdb's safe path
+"""
 import gdb
 
 gdb.execute('handle SIGALRM nostop noprint pass')
@@ -9,6 +13,8 @@ class Clusters(gdb.Command):
         super(Clusters, self).__init__('clusters', gdb.COMMAND_USER)
 
     def invoke(self, arg, from_tty):
+        """Iterate through a circular linked list of clusters and print out its
+        name along with address associated to each cluster"""
         uCluster_type = gdb.lookup_type('uClusterDL').pointer()
         cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
         curr = cluster_root
