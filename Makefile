@@ -6,6 +6,6 @@ single:
 multi:
 	u++ ${flag} -multi ${input}.cpp -o ${output}
 lint:
-	python3 -m pylint *.py
+	python3 -m pylint ${input}-gdb.py
 type:
 	pyre -l .pyre_configuration --source-directory . check
