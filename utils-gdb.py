@@ -45,7 +45,6 @@ class ClusterTasks(gdb.Command):
         """Iterate through a circular linked list of tasks and print out its
         name along with address associated to each cluster"""
         if len(arg) < 1:
-            # TODO: fix me
             print('Usage: cluster_tasks <cluster_address>')
 
         # convert to hex string to hex number
