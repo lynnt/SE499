@@ -44,8 +44,9 @@ class ClusterTasks(gdb.Command):
     def invoke(self, arg, from_tty):
         """Iterate through a circular linked list of tasks and print out its
         name along with address associated to each cluster"""
-        if len(arg) < 1:
+        if not arg:
             print('Usage: cluster_tasks <cluster_address>')
+            return
 
         # convert to hex string to hex number
         hex_addr = int(arg, 16)
