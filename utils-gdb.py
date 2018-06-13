@@ -24,12 +24,12 @@ class Clusters(gdb.Command):
             return
 
         curr = cluster_root
-        print('{:>20}\t{}'.format('Name', 'Address'))
+        print('{:>20}{:>18}'.format('Name', 'Address'))
 
         while True:
             print(
-                ('{:>20}\t{}'.format(curr['cluster_']['name'].string(),
-                                     curr['cluster_'].reference_value()))
+                    ('{:>20}{:>18}'.format(curr['cluster_']['name'].string(),
+                        str(curr['cluster_'].reference_value())[1:]))
                 )
             curr = curr['next'].cast(uClusterDL_ptr_type)
             if curr == cluster_root:
@@ -66,9 +66,9 @@ class ClusterTasks(gdb.Command):
         curr = task_root
         while True:
             print(
-                ('{:>20}\t{}\t{}'.format(curr['task_']['name'].string(),
-                                         curr['task_'].reference_value(),
-                                         curr['task_']['state'])
+                    ('{:>20}{:>18}{:>25}'.format(curr['task_']['name'].string(),
+                    str(curr['task_'].reference_value())[1:],
+                    str(curr['task_']['state']))
                 )
             )
 
@@ -78,3 +78,5 @@ class ClusterTasks(gdb.Command):
 
 Clusters()
 ClusterTasks()
+PushTask()
+Tasks()
