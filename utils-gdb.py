@@ -10,6 +10,9 @@ gdb.execute('handle SIGUSR1 nostop noprint pass')
 
 STACK = 0
 
+def print_usage(msg):
+    print('Usage: ' + msg)
+
 class Clusters(gdb.Command):
     """Print out the list of available clusters"""
     def __init__(self):
@@ -65,17 +68,20 @@ class ClusterTasks(gdb.Command):
                     {}'.format(cluster_address))
             return
 
-        print('{:>20}{:>18}{:>25}'.format('Task Name', 'Address', 'State'))
+        print('{:>4}{:>20}{:>18}{:>25}'.format('ID', 'Task Name', 'Address', 'State'))
         curr = task_root
+        task_id = 0
+
         while True:
             print(
-                    ('{:>20}{:>18}{:>25}'.format(curr['task_']['name'].string(),
+                    ('{:>4}{:>20}{:>18}{:>25}'.format(task_id, curr['task_']['name'].string(),
                     str(curr['task_'].reference_value())[1:],
                     str(curr['task_']['state']))
                 )
             )
 
             curr = curr['next'].cast(uBaseTaskDL_ptr_type)
+            task_id += 1
             if curr == task_root:
                 break
 
@@ -166,7 +172,118 @@ class PushTask(gdb.Command):
         gdb.execute('set $pc={}'.format(xpc))
         gdb.execute('frame 1')
 
+class PushTask(gdb.Command):
+    """Switch to a different task using task's address"""
+    def __init__(self):
+        super(PushTask, self).__init__('pushtask', gdb.COMMAND_USER)
+        self.usage_msg = 'pushtask <task_address>'
+
+    def invoke(self, arg, from_tty):
+        """Change to a new task by switching to a different stack and manually
+        adjusting sp, fp and pc"""
+        if not arg:
+            print_usage(self.usage_msg)
+            return
+
+        args = arg.split(' ')
+        if len(args) > 1:
+            print_usage(self.usage_msg)
+            return
+
+        # update the level of stack
+        global STACK
+        STACK += 1
+
+        # convert to hex string to hex number
+        hex_addr = int(arg, 16)
+        uBaseTask_ptr_type = gdb.lookup_type('uBaseTask').pointer()
+        uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
+        task_address = gdb.Value(hex_addr)
+
+        task_context = (
+            task_address.cast(uBaseTask_ptr_type)['context'].cast(uContext_t_ptr_type)
+            )
+
+        xsp = task_context['SP'] + 48
+        xfp = task_context['FP']
+        if not gdb.lookup_symbol('uSwitch'):
+            print('uSwitch symbol is not available')
+            return
+
+        # convert to string so we can strip out the address
+        xpc = str(gdb.parse_and_eval('uSwitch').address + 28)
+        # address is followed by type with format: addr <type>
+        ending_addr_index = xpc.find('<')
+        if ending_addr_index == -1:
+            print("Can't get PC address in correct format")
+            return
+
+        xpc = xpc[:ending_addr_index].strip()
+
+        # must be at frame 0 to set pc register
+        gdb.execute('select-frame 0')
+
+        # push sp, fp, pc into global variables
+        gdb.execute('set $__sp{} = $sp'.format(STACK))
+        gdb.execute('set $__fp{} = $fp'.format(STACK))
+        gdb.execute('set $__pc{} = $pc'.format(STACK))
+
+        # updater registers for new task
+        gdb.execute('set $rsp={}'.format(xsp))
+        gdb.execute('set $rbp={}'.format(xfp))
+        gdb.execute('set $pc={}'.format(xpc))
+        gdb.execute('frame 1')
+
+class PopTask(gdb.Command):
+    usage_msg = 'poptask <task_address>'
+
+    def __init__(self):
+        super(PopTask, self).__init__('poptask', gdb.COMMAND_USER)
+
+    def invoke(self, arg, from_tty):
+        global STACK
+        if STACK != 0:
+            # must be at frame 0 to set pc register
+            gdb.execute('select-frame 0')
+
+            # pop sp, fp, pc from global vars
+            gdb.execute('set $pc = $__pc{}'.format(STACK))
+            gdb.execute('set $rbp = $__fp{}'.format(STACK))
+            gdb.execute('set $sp = $__sp{}'.format(STACK))
+
+            # pop stack
+            STACK -= 1
+            # must be at C++ frame to access C++ vars
+            gdb.execute('frame 1')
+        else:
+            print('empty stack')
+
+#TODO: fixme
+class PushTaskID(gdb.Command):
+    def __init__(self):
+        super(PushTaskID, self).__init__('pushtask_id', gdb.COMMAND_USER)
+        self.usage_msg = 'pushtask_id <task_id> [cluster_address]'
+
+    def invoke(self, arg, from_tty):
+        if not arg:
+            print_usage(self.usage_msg)
+            return
+
+        args = arg.split(' ')
+        task_id = args[0]
+        cluster_addr = None
+
+        if len(args) == 1:
+            cluster_instance = gdb.parse_and_eval('uThisCluster()')
+        elif len(args) == 2:
+            cluster_addr = args[1]
+        else:
+            print_usage(self.usage_msg)
+            return
+
 Clusters()
 ClusterTasks()
+PopTask()
 PushTask()
+PushTaskID()
 Tasks()
