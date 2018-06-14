@@ -51,9 +51,9 @@ class ClusterTasks(gdb.Command):
             return
 
         # convert to hex string to hex number
-        hex_addr = int(arg, 16)
         uCluster_ptr_type = gdb.lookup_type('uCluster').pointer()
         uBaseTaskDL_ptr_type = gdb.lookup_type('uBaseTaskDL').pointer()
+        hex_addr = int(arg, 16)
         cluster_address = gdb.Value(hex_addr)
 
         task_root = (
@@ -65,6 +65,7 @@ class ClusterTasks(gdb.Command):
                     {}'.format(cluster_address))
             return
 
+        print('{:>20}{:>18}{:>25}'.format('Task Name', 'Address', 'State'))
         curr = task_root
         while True:
             print(
