@@ -9,6 +9,9 @@ gdb.execute('handle SIGALRM nostop noprint pass')
 gdb.execute('handle SIGUSR1 nostop noprint pass')
 
 STACK = 0
+uCluster_ptr_type = gdb.lookup_type('uCluster').pointer()
+uBaseTask_ptr_type = gdb.lookup_type('uBaseTask').pointer()
+uBaseTaskDL_ptr_type = gdb.lookup_type('uBaseTaskDL').pointer()
 
 def print_usage(msg):
     print('Usage: ' + msg)
@@ -54,8 +57,6 @@ class ClusterTasks(gdb.Command):
             return
 
         # convert to hex string to hex number
-        uCluster_ptr_type = gdb.lookup_type('uCluster').pointer()
-        uBaseTaskDL_ptr_type = gdb.lookup_type('uBaseTaskDL').pointer()
         hex_addr = int(arg, 16)
         cluster_address = gdb.Value(hex_addr)
 
@@ -130,7 +131,6 @@ class PushTask(gdb.Command):
 
         # convert to hex string to hex number
         hex_addr = int(arg, 16)
-        uBaseTask_ptr_type = gdb.lookup_type('uBaseTask').pointer()
         uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
         task_address = gdb.Value(hex_addr)
 
@@ -196,7 +196,6 @@ class PushTask(gdb.Command):
 
         # convert to hex string to hex number
         hex_addr = int(arg, 16)
-        uBaseTask_ptr_type = gdb.lookup_type('uBaseTask').pointer()
         uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
         task_address = gdb.Value(hex_addr)
 
@@ -270,16 +269,54 @@ class PushTaskID(gdb.Command):
             return
 
         args = arg.split(' ')
-        task_id = args[0]
-        cluster_addr = None
+        try:
+            task_id = int(args[0])
+        except:
+            print_usage(self.usage_msg)
+            return
+
+        curr_cluster = None
 
         if len(args) == 1:
-            cluster_instance = gdb.parse_and_eval('uThisCluster()')
-        elif len(args) == 2:
-            cluster_addr = args[1]
+            curr_cluster = gdb.parse_and_eval('&uThisCluster()')
+            print('Current cluster: ', curr_cluster['name'].string())
+        #elif len(args) == 2:
+        #    cluster_addr = args[1]
         else:
             print_usage(self.usage_msg)
             return
+
+        task_root = (
+            curr_cluster.cast(uCluster_ptr_type)['tasksOnCluster']['root']
+            )
+
+        if not task_root:
+            print('tasksOnCluster list is None')
+            return
+
+        curr = task_root
+        curr_id = 0
+        task_addr = None
+
+        while True:
+            curr = curr['next'].cast(uBaseTaskDL_ptr_type)
+
+            if curr == task_root:
+                break
+
+            if curr_id == task_id:
+                task_addr = str(curr['task_'].address)
+                break
+
+            curr_id += 1
+
+        if curr_id < task_id:
+            print(
+                    ("Can't find task ID: {}. Only have {} tasks".format(task_id,curr_id))
+                )
+        else:
+            PushTask().invoke(task_addr, False)
+
 
 Clusters()
 ClusterTasks()
