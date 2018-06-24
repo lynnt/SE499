@@ -46,6 +46,7 @@ class Clusters(gdb.Command):
 class ClusterTasks(gdb.Command):
     """Display a list of all info about all available tasks on a particular
     cluster"""
+    usage_msg = 'cluster_tasks <cluster_address>'
     def __init__(self):
         super(ClusterTasks, self).__init__('cluster_tasks', gdb.COMMAND_USER)
 
@@ -53,11 +54,15 @@ class ClusterTasks(gdb.Command):
         """Iterate through a circular linked list of tasks and print out its
         name along with address associated to each cluster"""
         if not arg:
-            print('Usage: cluster_tasks <cluster_address>')
             return
 
         # convert to hex string to hex number
-        hex_addr = int(arg, 16)
+        try:
+            hex_addr = int(arg, 16)
+        except:
+            print_usage(self.usage_msg)
+            return
+
         cluster_address = gdb.Value(hex_addr)
 
         task_root = (
@@ -116,66 +121,12 @@ class Tasks(gdb.Command):
             if curr == cluster_root:
                 break
 
-
-class PushTask(gdb.Command):
-    """Switch to a different task"""
-    def __init__(self):
-        super(PushTask, self).__init__('push_task', gdb.COMMAND_USER)
-
-    def invoke(self, arg, from_tty):
-        """Change to a new task by switching to a different stack and manually
-        adjusting sp, fp and pc"""
-        if not arg:
-            print('Usage: push_task <task_address>')
-            return
-
-        # convert to hex string to hex number
-        hex_addr = int(arg, 16)
-        uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
-        task_address = gdb.Value(hex_addr)
-
-        task_context = (
-            task_address.cast(uBaseTask_ptr_type)['context'].cast(uContext_t_ptr_type)
-            )
-
-        xsp = task_context['SP'] + 48
-        xfp = task_context['FP']
-        if not gdb.lookup_symbol('uSwitch'):
-            print('uSwitch symbol is not available')
-            return
-
-        # convert to string so we can strip out the address
-        xpc = str(gdb.parse_and_eval('uSwitch').address + 28)
-        # address is followed by type with format: addr <type>
-        ending_addr_index = xpc.find('<')
-        if ending_addr_index == -1:
-            print("Can't get PC address in correct format")
-            return
-
-        xpc = xpc[:ending_addr_index].strip()
-
-        # update the level of stack
-        global STACK
-        STACK += 1
-
-        # must be at frame 0 to set pc register
-        gdb.execute('select-frame 0')
-        # push sp, fp, pc into global variables
-
-        gdb.execute('set $__sp{} = $sp'.format(STACK))
-        gdb.execute('set $__fp{} = $sp'.format(STACK))
-        gdb.execute('set $__pc{} = $sp'.format(STACK))
-
-        # updater registers for new task
-        gdb.execute('set $rsp={}'.format(xsp))
-        gdb.execute('set $rbp={}'.format(xfp))
-        gdb.execute('set $pc={}'.format(xpc))
-
 class PushTask(gdb.Command):
     """Switch to a different task using task's address"""
+    usage_msg = 'pushtask <task_address>'
+
     def __init__(self):
         super(PushTask, self).__init__('pushtask', gdb.COMMAND_USER)
-        self.usage_msg = 'pushtask <task_address>'
 
     def invoke(self, arg, from_tty):
         """Change to a new task by switching to a different stack and manually
@@ -194,13 +145,25 @@ class PushTask(gdb.Command):
         STACK += 1
 
         # convert to hex string to hex number
-        hex_addr = int(arg, 16)
+        try:
+            hex_addr = int(arg, 16)
+        except:
+            print_usage(self.usage_msg)
+            return
+
         uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
         task_address = gdb.Value(hex_addr)
 
-        task_context = (
-            task_address.cast(uBaseTask_ptr_type)['context'].cast(uContext_t_ptr_type)
-            )
+        task = task_address.cast(uBaseTask_ptr_type)
+        task_state = (
+            str(task_address.cast(uBaseTask_ptr_type)['state']).split('::', 1)[-1]
+        )
+
+        if task_state == 'Terminate':
+            print('Cannot switch to a terminated thread')
+            return
+
+        task_context = task['context'].cast(uContext_t_ptr_type)
 
         xsp = task_context['SP'] + 48
         xfp = task_context['FP']
@@ -232,6 +195,7 @@ class PushTask(gdb.Command):
         gdb.execute('set $pc={}'.format(xpc))
 
 class PopTask(gdb.Command):
+    """Switch to back to previous task on the stack"""
     usage_msg = 'poptask <task_address>'
 
     def __init__(self):
@@ -255,11 +219,15 @@ class PopTask(gdb.Command):
         else:
             print('empty stack')
 
-#TODO: fixme
 class PushTaskID(gdb.Command):
+    """Switch to a different task using task id"""
+    usage_msg = 'pushtask_id <task_id> [cluster_id]'
     def __init__(self):
         super(PushTaskID, self).__init__('pushtask_id', gdb.COMMAND_USER)
-        self.usage_msg = 'pushtask_id <task_id> [cluster_address]'
+
+    def lookup_cluster(self, cluster_id):
+        #TODO: implement me
+        pass
 
     def invoke(self, arg, from_tty):
         if not arg:
@@ -273,40 +241,53 @@ class PushTaskID(gdb.Command):
             print_usage(self.usage_msg)
             return
 
-        curr_cluster = None
+        cluster = None
+        cluster_id = -1
 
         if len(args) == 1:
-            curr_cluster = gdb.parse_and_eval('&uThisCluster()')
-            print('Current cluster: ', curr_cluster['name'].string())
-        #elif len(args) == 2:
-        #    cluster_addr = args[1]
+            cluster = gdb.parse_and_eval('&uThisCluster()')
+        elif len(args) == 2:
+            try:
+               cluster_id = int(args[1])
+            except:
+                print_usage(self.usage_msg)
+                return
         else:
             print_usage(self.usage_msg)
             return
 
+        if cluster_id > -1:
+            cluster = lookup_cluster(cluster_id)
+        elif cluster_id == -1:
+            print('Current cluster: ', cluster['name'].string())
+        else:
+            print('Unvalid range of cluster_id')
+
         task_root = (
-            curr_cluster.cast(uCluster_ptr_type)['tasksOnCluster']['root']
+            cluster.cast(uCluster_ptr_type)['tasksOnCluster']['root']
             )
 
         if not task_root:
             print('tasksOnCluster list is None')
             return
 
-        curr = task_root
         curr_id = 0
         task_addr = None
+        if task_id == 0:
+            task_addr = str(task_roo['task_'].address)
+        else:
+            curr = task_root
+            while True:
+                curr = curr['next'].cast(uBaseTaskDL_ptr_type)
 
-        while True:
-            curr = curr['next'].cast(uBaseTaskDL_ptr_type)
+                if curr == task_root:
+                    break
 
-            if curr == task_root:
-                break
+                if curr_id == task_id:
+                    task_addr = str(curr['task_'].address)
+                    break
 
-            if curr_id == task_id:
-                task_addr = str(curr['task_'].address)
-                break
-
-            curr_id += 1
+                curr_id += 1
 
         if curr_id < task_id:
             print(
