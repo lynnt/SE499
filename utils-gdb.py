@@ -170,7 +170,6 @@ class PushTask(gdb.Command):
         gdb.execute('set $rsp={}'.format(xsp))
         gdb.execute('set $rbp={}'.format(xfp))
         gdb.execute('set $pc={}'.format(xpc))
-        gdb.execute('frame 1')
 
 class PushTask(gdb.Command):
     """Switch to a different task using task's address"""
@@ -231,7 +230,6 @@ class PushTask(gdb.Command):
         gdb.execute('set $rsp={}'.format(xsp))
         gdb.execute('set $rbp={}'.format(xfp))
         gdb.execute('set $pc={}'.format(xpc))
-        gdb.execute('frame 1')
 
 class PopTask(gdb.Command):
     usage_msg = 'poptask <task_address>'
