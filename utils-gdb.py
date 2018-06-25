@@ -295,7 +295,7 @@ class PushTaskID(gdb.Command):
             print('Unvalid range of cluster_id')
             return
 
-        print('Current cluster: ', cluster['name'].string())
+        print('Cluster: ', cluster['name'].string())
         task_root = (
             cluster.cast(uCluster_ptr_type)['tasksOnCluster']['root']
             )
