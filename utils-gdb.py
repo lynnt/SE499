@@ -10,11 +10,19 @@ gdb.execute('handle SIGUSR1 nostop noprint pass')
 
 STACK = 0
 uCluster_ptr_type = gdb.lookup_type('uCluster').pointer()
+uClusterDL_ptr_type = gdb.lookup_type('uClusterDL').pointer()
 uBaseTask_ptr_type = gdb.lookup_type('uBaseTask').pointer()
 uBaseTaskDL_ptr_type = gdb.lookup_type('uBaseTaskDL').pointer()
 
 def print_usage(msg):
     print('Usage: ' + msg)
+
+def get_cluster_root():
+    cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
+    if cluster_root is None:
+        print('uKernelModule::globalClusters list is None')
+        return
+    return cluster_root
 
 class Clusters(gdb.Command):
     """Print out the list of available clusters"""
@@ -25,12 +33,7 @@ class Clusters(gdb.Command):
         """Iterate through a circular linked list of clusters and print out its
         name along with address associated to each cluster"""
 
-        uClusterDL_ptr_type = gdb.lookup_type('uClusterDL').pointer()
-        cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
-        if cluster_root is None:
-            print('uKernelModule::globalClusters list is None')
-            return
-
+        cluster_root = get_cluster_root()
         curr = cluster_root
         print('{:>20}{:>18}'.format('Name', 'Address'))
 
@@ -99,7 +102,6 @@ class Tasks(gdb.Command):
     def invoke(self, arg, from_tty):
         """Iterate through each cluster, iterate through all tasks and  print out info about all the tasks
         in those clusters"""
-        uClusterDL_ptr_type = gdb.lookup_type('uClusterDL').pointer()
         cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
         if cluster_root is None:
             print('uKernelModule::globalClusters list is None')
@@ -165,6 +167,7 @@ class PushTask(gdb.Command):
 
         task_context = task['context'].cast(uContext_t_ptr_type)
 
+        # lookup for sp,fp and uSwitch
         xsp = task_context['SP'] + 48
         xfp = task_context['FP']
         if not gdb.lookup_symbol('uSwitch'):
@@ -173,6 +176,7 @@ class PushTask(gdb.Command):
 
         # convert to string so we can strip out the address
         xpc = str(gdb.parse_and_eval('uSwitch').address + 28)
+
         # address is followed by type with format: addr <type>
         ending_addr_index = xpc.find('<')
         if ending_addr_index == -1:
@@ -226,8 +230,32 @@ class PushTaskID(gdb.Command):
         super(PushTaskID, self).__init__('pushtask_id', gdb.COMMAND_USER)
 
     def lookup_cluster(self, cluster_id):
-        #TODO: implement me
-        pass
+        curr_id = 0
+
+        cluster_root = get_cluster_root()
+        cluster = None
+
+        # lookup for the task associated with the id
+        if cluster_id == curr_id:
+            cluster = cluster_root['cluster_'].address
+        else:
+            curr = cluster_root
+            while True:
+                curr = curr['next'].cast(uClusterDL_ptr_type)
+                curr_id += 1
+
+                if curr_id == cluster_id:
+                    cluster = curr['cluster_'].address
+                    break
+
+                if curr == cluster_root:
+                    break
+
+        if curr_id < cluster_id:
+            print(
+                    ("Can't find cluster ID: {}. Only have {} clusters".format(cluster_id, curr_id))
+                )
+        return cluster
 
     def invoke(self, arg, from_tty):
         if not arg:
@@ -244,6 +272,7 @@ class PushTaskID(gdb.Command):
         cluster = None
         cluster_id = -1
 
+        # cmd line argument parsing
         if len(args) == 1:
             cluster = gdb.parse_and_eval('&uThisCluster()')
         elif len(args) == 2:
@@ -256,8 +285,13 @@ class PushTaskID(gdb.Command):
             print_usage(self.usage_msg)
             return
 
+        # check if cluster_id is within the appriopriate range and lookup for
+        # the right cluster if asked
         if cluster_id > -1:
-            cluster = lookup_cluster(cluster_id)
+            cluster = self.lookup_cluster(cluster_id)
+            if not cluster:
+                return;
+            print('Cluster: ', cluster['name'].string())
         elif cluster_id == -1:
             print('Current cluster: ', cluster['name'].string())
         else:
@@ -273,23 +307,24 @@ class PushTaskID(gdb.Command):
 
         curr_id = 0
         task_addr = None
-        if task_id == 0:
-            task_addr = str(task_roo['task_'].address)
+
+        # lookup for the task associated with the id
+        if task_id == curr_id:
+            task_addr = str(task_root['task_'].address)
         else:
             curr = task_root
             while True:
                 curr = curr['next'].cast(uBaseTaskDL_ptr_type)
-
-                if curr == task_root:
-                    break
+                curr_id += 1
 
                 if curr_id == task_id:
                     task_addr = str(curr['task_'].address)
                     break
 
-                curr_id += 1
+                if curr == task_root:
+                    break
 
-        if curr_id < task_id:
+        if not task_addr:
             print(
                     ("Can't find task ID: {}. Only have {} tasks".format(task_id,curr_id))
                 )
