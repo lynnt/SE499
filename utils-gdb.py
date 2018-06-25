@@ -291,12 +291,11 @@ class PushTaskID(gdb.Command):
             cluster = self.lookup_cluster(cluster_id)
             if not cluster:
                 return;
-            print('Cluster: ', cluster['name'].string())
-        elif cluster_id == -1:
-            print('Current cluster: ', cluster['name'].string())
-        else:
+        elif cluster_id < -1:
             print('Unvalid range of cluster_id')
+            return
 
+        print('Current cluster: ', cluster['name'].string())
         task_root = (
             cluster.cast(uCluster_ptr_type)['tasksOnCluster']['root']
             )
