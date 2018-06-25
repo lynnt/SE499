@@ -46,6 +46,56 @@ class Clusters(gdb.Command):
             if curr == cluster_root:
                 break
 
+class ClusterProcs(gdb.Command):
+    """Display a list of all info about all available processors on a particular
+    cluster"""
+    usage_msg = 'cluster_procs <cluster_address>'
+    def __init__(self):
+        super(ClusterProcs, self).__init__('cluster_procs', gdb.COMMAND_USER)
+
+    def invoke(self, arg, from_tty):
+        """Iterate through a circular linked list of tasks and print out all
+        info about each processor in that cluster"""
+        if not arg:
+            print_usage(self.usage_msg)
+            return
+
+        # convert to hex string to hex number
+        try:
+            hex_addr = int(arg, 16)
+        except:
+            print_usage(self.usage_msg)
+            return
+
+        cluster_address = gdb.Value(hex_addr)
+
+        proc_root = (
+            cluster_address.cast(uCluster_ptr_type)['processorsOnCluster']['root']
+            )
+
+        if proc_root is None:
+            print('There is no processor for cluster at address: \
+                    {}'.format(cluster_address))
+            return
+
+        uProcessorDL_ptr_type = gdb.lookup_type('uProcessorDL').pointer()
+        print('{:>18}{:>20}{:>20}{:>20}'.format('Address', 'PID', 'Preemption',
+            'Spin'))
+        curr = proc_root
+
+        while True:
+            processor = curr['processor_']
+            print(
+                    ('{:>18}{:>20}{:>20}{:>20}'.format(str(processor.address),
+                        str(processor['pid']), str(processor['preemption']),
+                        str(processor['spin']))
+                )
+            )
+
+            curr = curr['next'].cast(uProcessorDL_ptr_type)
+            if curr == proc_root:
+                break
+
 class ClusterTasks(gdb.Command):
     """Display a list of all info about all available tasks on a particular
     cluster"""
@@ -57,6 +107,7 @@ class ClusterTasks(gdb.Command):
         """Iterate through a circular linked list of tasks and print out its
         name along with address associated to each cluster"""
         if not arg:
+            print_usage(self.usage_msg)
             return
 
         # convert to hex string to hex number
@@ -330,8 +381,8 @@ class PushTaskID(gdb.Command):
         else:
             PushTask().invoke(task_addr, False)
 
-
 Clusters()
+ClusterProcs()
 ClusterTasks()
 PopTask()
 PushTask()
