@@ -21,7 +21,6 @@ def get_cluster_root():
     cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
     if cluster_root is None:
         print('uKernelModule::globalClusters list is None')
-        return
     return cluster_root
 
 class Clusters(gdb.Command):
@@ -34,6 +33,8 @@ class Clusters(gdb.Command):
         name along with address associated to each cluster"""
 
         cluster_root = get_cluster_root()
+        if not cluster_root:
+            return
         curr = cluster_root
         print('{:>20}{:>18}'.format('Name', 'Address'))
 
@@ -60,7 +61,7 @@ class ClusterProcs(gdb.Command):
             print_usage(self.usage_msg)
             return
 
-        # convert to hex string to hex number
+        # convert hex string to hex number
         try:
             hex_addr = int(arg, 16)
         except:
@@ -110,7 +111,7 @@ class ClusterTasks(gdb.Command):
             print_usage(self.usage_msg)
             return
 
-        # convert to hex string to hex number
+        # convert hex string to hex number
         try:
             hex_addr = int(arg, 16)
         except:
@@ -169,6 +170,9 @@ class Tasks(gdb.Command):
                 )
 
             ClusterTasks().invoke(addr, False)
+            import sys
+            # TODO: remove
+            sys.exit(1)
 
             curr = curr['next'].cast(uClusterDL_ptr_type)
             if curr == cluster_root:
@@ -197,7 +201,7 @@ class PushTask(gdb.Command):
         global STACK
         STACK += 1
 
-        # convert to hex string to hex number
+        # convert hex string to hex number
         try:
             hex_addr = int(arg, 16)
         except:
@@ -225,7 +229,7 @@ class PushTask(gdb.Command):
             print('uSwitch symbol is not available')
             return
 
-        # convert to string so we can strip out the address
+        # convert string so we can strip out the address
         xpc = str(gdb.parse_and_eval('uSwitch').address + 28)
 
         # address is followed by type with format: addr <type>
@@ -284,6 +288,8 @@ class PushTaskID(gdb.Command):
         curr_id = 0
 
         cluster_root = get_cluster_root()
+        if not cluster_root:
+            return
         cluster = None
 
         # lookup for the task associated with the id
