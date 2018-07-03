@@ -170,10 +170,6 @@ class Tasks(gdb.Command):
                 )
 
             ClusterTasks().invoke(addr, False)
-            import sys
-            # TODO: remove
-            sys.exit(1)
-
             curr = curr['next'].cast(uClusterDL_ptr_type)
             if curr == cluster_root:
                 break
