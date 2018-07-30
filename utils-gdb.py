@@ -2,17 +2,31 @@
 To run this extension, the python name has to be as same as one of the loaded library
 Additionally, the file must exist in a folder which is in gdb's safe path
 """
+import collections
 import gdb
 
 # set these signal handlers with some settings (nostop, noprint, pass)
 gdb.execute('handle SIGALRM nostop noprint pass')
 gdb.execute('handle SIGUSR1 nostop noprint pass')
 
-STACK = 0
+StackInfo = collections.namedtuple('StackInfo', 'sp fp pc')
+STACK = []
 uCluster_ptr_type = gdb.lookup_type('uCluster').pointer()
 uClusterDL_ptr_type = gdb.lookup_type('uClusterDL').pointer()
 uBaseTask_ptr_type = gdb.lookup_type('uBaseTask').pointer()
 uBaseTaskDL_ptr_type = gdb.lookup_type('uBaseTaskDL').pointer()
+int_ptr_type = gdb.lookup_type('int').pointer()
+
+def get_addr(addr, name=None):
+    str_addr = str(addr)
+    ending_addr_index = str_addr.find('<')
+    if ending_addr_index == -1:
+        if not name:
+            print("Can't get address in correct format")
+        else:
+            print("Can't get {} address in correct format".format(name))
+        return
+    return str_addr[:ending_addr_index].strip()
 
 def print_usage(msg):
     print('Usage: ' + msg)
@@ -22,6 +36,10 @@ def get_cluster_root():
     if cluster_root is None:
         print('uKernelModule::globalClusters list is None')
     return cluster_root
+
+def get_hexaddr_from_gdb_value_ptr(addr):
+    val = addr.cast(int_ptr_type).dereference()
+    return hex(int(val))
 
 class Clusters(gdb.Command):
     """Print out the list of available clusters"""
@@ -193,10 +211,6 @@ class PushTask(gdb.Command):
             print_usage(self.usage_msg)
             return
 
-        # update the level of stack
-        global STACK
-        STACK += 1
-
         # convert hex string to hex number
         try:
             hex_addr = int(arg, 16)
@@ -218,6 +232,7 @@ class PushTask(gdb.Command):
 
         task_context = task['context'].cast(uContext_t_ptr_type)
 
+
         # lookup for sp,fp and uSwitch
         xsp = task_context['SP'] + 48
         xfp = task_context['FP']
@@ -226,23 +241,18 @@ class PushTask(gdb.Command):
             return
 
         # convert string so we can strip out the address
-        xpc = str(gdb.parse_and_eval('uSwitch').address + 28)
-
-        # address is followed by type with format: addr <type>
-        ending_addr_index = xpc.find('<')
-        if ending_addr_index == -1:
-            print("Can't get PC address in correct format")
-            return
-
-        xpc = xpc[:ending_addr_index].strip()
+        xpc = get_addr(gdb.parse_and_eval('uSwitch').address + 28, 'PC')
 
         # must be at frame 0 to set pc register
         gdb.execute('select-frame 0')
 
-        # push sp, fp, pc into global variables
-        gdb.execute('set $__sp{} = $sp'.format(STACK))
-        gdb.execute('set $__fp{} = $fp'.format(STACK))
-        gdb.execute('set $__pc{} = $pc'.format(STACK))
+        # push sp, fp, pc into a global stack
+        global STACK
+        sp = gdb.parse_and_eval('$sp')
+        fp = gdb.parse_and_eval('$fp')
+        pc = gdb.parse_and_eval('$pc')
+        stack_info = StackInfo(sp = sp, fp = fp, pc = pc)
+        STACK.append(stack_info)
 
         # updater registers for new task
         gdb.execute('set $rsp={}'.format(xsp))
@@ -258,19 +268,23 @@ class PopTask(gdb.Command):
 
     def invoke(self, arg, from_tty):
         global STACK
-        if STACK != 0:
+        if len(STACK) != 0:
             # must be at frame 0 to set pc register
             gdb.execute('select-frame 0')
 
-            # pop sp, fp, pc from global vars
-            gdb.execute('set $pc = $__pc{}'.format(STACK))
-            gdb.execute('set $rbp = $__fp{}'.format(STACK))
-            gdb.execute('set $sp = $__sp{}'.format(STACK))
-
             # pop stack
-            STACK -= 1
+            stack_info = STACK.pop()
+            pc = get_addr(stack_info.pc, 'PC')
+            sp = stack_info.sp
+            fp = stack_info.fp
+
+            # pop sp, fp, pc from global vars
+            gdb.execute('set $pc = {}'.format(pc))
+            gdb.execute('set $rbp = {}'.format(fp))
+            gdb.execute('set $sp = {}'.format(sp))
+
             # must be at C++ frame to access C++ vars
-            gdb.execute('frame 1')
+            #db.execute('frame 1')
         else:
             print('empty stack')
 

@@ -12,10 +12,10 @@ _Task T {
 };
 
 int main() {
-    int n = 10;
-    T p[n];
-    /*
     uProcessor p[3];
+    int n = 10;
+    T s[n];
+    /*
     {
     }
     uCluster fred( "fred" );
