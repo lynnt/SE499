@@ -9,23 +9,25 @@ import gdb
 gdb.execute('handle SIGALRM nostop noprint pass')
 gdb.execute('handle SIGUSR1 nostop noprint pass')
 
-StackInfo = collections.namedtuple('StackInfo', 'sp fp pc')
-STACK = []
+# GDB types for various structures/types in uC++
 uCluster_ptr_type = gdb.lookup_type('uCluster').pointer()
 uClusterDL_ptr_type = gdb.lookup_type('uClusterDL').pointer()
 uBaseTask_ptr_type = gdb.lookup_type('uBaseTask').pointer()
 uBaseTaskDL_ptr_type = gdb.lookup_type('uBaseTaskDL').pointer()
 int_ptr_type = gdb.lookup_type('int').pointer()
 
+# A named tuple representing information about a stack
+StackInfo = collections.namedtuple('StackInfo', 'sp fp pc')
+
+# A global variable to keep track of stack information as one context switches
+# from one task to another task
+STACK = []
+
 def get_addr(addr, name=None):
     str_addr = str(addr)
     ending_addr_index = str_addr.find('<')
     if ending_addr_index == -1:
-        if not name:
-            print("Can't get address in correct format")
-        else:
-            print("Can't get {} address in correct format".format(name))
-        return
+        return addr
     return str_addr[:ending_addr_index].strip()
 
 def print_usage(msg):
@@ -36,10 +38,6 @@ def get_cluster_root():
     if cluster_root is None:
         print('uKernelModule::globalClusters list is None')
     return cluster_root
-
-def get_hexaddr_from_gdb_value_ptr(addr):
-    val = addr.cast(int_ptr_type).dereference()
-    return hex(int(val))
 
 class Clusters(gdb.Command):
     """Print out the list of available clusters"""
@@ -278,13 +276,13 @@ class PopTask(gdb.Command):
             sp = stack_info.sp
             fp = stack_info.fp
 
-            # pop sp, fp, pc from global vars
+            # pop sp, fp, pc from global stack
             gdb.execute('set $pc = {}'.format(pc))
             gdb.execute('set $rbp = {}'.format(fp))
             gdb.execute('set $sp = {}'.format(sp))
 
             # must be at C++ frame to access C++ vars
-            #db.execute('frame 1')
+            gdb.execute('frame 1')
         else:
             print('empty stack')
 
@@ -397,10 +395,33 @@ class PushTaskID(gdb.Command):
         else:
             PushTask().invoke(task_addr, False)
 
+class ResetOriginFrame(gdb.Command):
+    """Reset to the origin frame prior to continue execution again"""
+    usage_msg = 'resetOriginFrame'
+    def __init__(self):
+        super(ResetOriginFrame, self).__init__('reset', gdb.COMMAND_USER)
+
+    def invoke(self, arg, from_tty):
+        global STACK
+        stack_info = STACK.pop(0)
+        STACK = []
+        pc = get_addr(stack_info.pc, 'PC')
+        sp = stack_info.sp
+        fp = stack_info.fp
+
+        # pop sp, fp, pc from global stack
+        gdb.execute('set $pc = {}'.format(pc))
+        gdb.execute('set $rbp = {}'.format(fp))
+        gdb.execute('set $sp = {}'.format(sp))
+
+        # must be at C++ frame to access C++ vars
+        gdb.execute('frame 1')
+
 Clusters()
 ClusterProcs()
 ClusterTasks()
 PopTask()
 PushTask()
 PushTaskID()
+ResetOriginFrame()
 Tasks()
