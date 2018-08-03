@@ -258,7 +258,7 @@ class PushTask(gdb.Command):
         gdb.execute('set $pc={}'.format(xpc))
 
 class PopTask(gdb.Command):
-    """Switch to back to previous task on the stack"""
+    """Switch back to previous task on the stack"""
     usage_msg = 'poptask <task_address>'
 
     def __init__(self):
