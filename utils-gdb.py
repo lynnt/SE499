@@ -404,7 +404,7 @@ class ResetOriginFrame(gdb.Command):
     def invoke(self, arg, from_tty):
         global STACK
         stack_info = STACK.pop(0)
-        STACK = []
+        STACK.clear()
         pc = get_addr(stack_info.pc, 'PC')
         sp = stack_info.sp
         fp = stack_info.fp
