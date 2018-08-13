@@ -27,11 +27,18 @@ def get_addr(addr, name=None):
     str_addr = str(addr)
     ending_addr_index = str_addr.find('<')
     if ending_addr_index == -1:
-        return addr
+        return str(addr)
     return str_addr[:ending_addr_index].strip()
 
 def print_usage(msg):
     print('Usage: ' + msg)
+
+def get_argv_list(args):
+    # parse the string format of arguments and return a list of arguments
+    argv = args.split(' ')
+    if len(argv) == 1 and argv[0] == '':
+        return []
+    return argv
 
 def get_cluster_root():
     cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
@@ -63,12 +70,12 @@ class Clusters(gdb.Command):
             if curr == cluster_root:
                 break
 
-class ClusterProcs(gdb.Command):
+class ClusterProcessors(gdb.Command):
     """Display a list of all info about all available processors on a particular
     cluster"""
-    usage_msg = 'cluster_procs <cluster_address>'
+    usage_msg = 'processors <cluster_address>'
     def __init__(self):
-        super(ClusterProcs, self).__init__('cluster_procs', gdb.COMMAND_USER)
+        super(ClusterProcessors, self).__init__('processors', gdb.COMMAND_USER)
 
     def invoke(self, arg, from_tty):
         """Iterate through a circular linked list of tasks and print out all
@@ -77,20 +84,22 @@ class ClusterProcs(gdb.Command):
             print_usage(self.usage_msg)
             return
 
+        argc = get_argv_list(arg)
+
         # convert hex string to hex number
         try:
-            hex_addr = int(arg, 16)
+            hex_addr = int(argc[0], 16)
         except:
             print_usage(self.usage_msg)
             return
 
         cluster_address = gdb.Value(hex_addr)
 
-        proc_root = (
+        processor_root = (
             cluster_address.cast(uCluster_ptr_type)['processorsOnCluster']['root']
             )
 
-        if proc_root is None:
+        if processor_root is None:
             print('There is no processor for cluster at address: \
                     {}'.format(cluster_address))
             return
@@ -98,203 +107,61 @@ class ClusterProcs(gdb.Command):
         uProcessorDL_ptr_type = gdb.lookup_type('uProcessorDL').pointer()
         print('{:>18}{:>20}{:>20}{:>20}'.format('Address', 'PID', 'Preemption',
             'Spin'))
-        curr = proc_root
+        curr = processor_root
 
         while True:
             processor = curr['processor_']
             print(
-                    ('{:>18}{:>20}{:>20}{:>20}'.format(str(processor.address),
+                    ('{:>18}{:>20}{:>20}{:>20}'.format(get_addr(processor.address),
                         str(processor['pid']), str(processor['preemption']),
                         str(processor['spin']))
                 )
             )
 
             curr = curr['next'].cast(uProcessorDL_ptr_type)
-            if curr == proc_root:
+            if curr == processor_root:
                 break
 
 class ClusterTasks(gdb.Command):
-    """Display a list of all info about all available tasks on a particular
-    cluster"""
     usage_msg = 'cluster_tasks <cluster_address>'
     def __init__(self):
         super(ClusterTasks, self).__init__('cluster_tasks', gdb.COMMAND_USER)
 
     def invoke(self, arg, from_tty):
-        """Iterate through a circular linked list of tasks and print out its
-        name along with address associated to each cluster"""
         if not arg:
             print_usage(self.usage_msg)
             return
 
-        # convert hex string to hex number
-        try:
-            hex_addr = int(arg, 16)
-        except:
-            print_usage(self.usage_msg)
-            return
+        argv = get_argv_list(arg)
 
-        cluster_address = gdb.Value(hex_addr)
 
-        task_root = (
-            cluster_address.cast(uCluster_ptr_type)['tasksOnCluster']['root']
-            )
+class Task(gdb.Command):
+    """
+    task                            : print all the tasks in a program
+    task <task_address>             : context switch to a different task at address @task_address
+    task <clusterName>              : print all the tasks in @clusterName
+    task <clusterName> <task_id>    : context switch to a different task with an id
+                                      @task_id and in cluster @clusterName
+    """
 
-        if task_root is None:
-            print('There is no tasks for cluster at address: \
-                    {}'.format(cluster_address))
-            return
-
-        print('{:>4}{:>20}{:>18}{:>25}'.format('ID', 'Task Name', 'Address', 'State'))
-        curr = task_root
-        task_id = 0
-
-        while True:
-            print(
-                    ('{:>4}{:>20}{:>18}{:>25}'.format(task_id, curr['task_']['name'].string(),
-                    str(curr['task_'].reference_value())[1:],
-                    str(curr['task_']['state']))
-                )
-            )
-
-            curr = curr['next'].cast(uBaseTaskDL_ptr_type)
-            task_id += 1
-            if curr == task_root:
-                break
-
-class Tasks(gdb.Command):
-    """List all the tasks' info for all available clusters"""
-    def __init__(self):
-        super(Tasks, self).__init__('tasks', gdb.COMMAND_USER)
-
-    def invoke(self, arg, from_tty):
-        """Iterate through each cluster, iterate through all tasks and  print out info about all the tasks
-        in those clusters"""
-        cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
-        if cluster_root is None:
-            print('uKernelModule::globalClusters list is None')
-            return
-
-        curr = cluster_root
-        print('{:>20}{:>18}'.format('Cluster Name', 'Address'))
-
-        while True:
-            addr = str(curr['cluster_'].reference_value())[1:]
-            print(
-                    ('{:>20}{:>18}'.format(curr['cluster_']['name'].string(),
-                        addr))
-                )
-
-            ClusterTasks().invoke(addr, False)
-            curr = curr['next'].cast(uClusterDL_ptr_type)
-            if curr == cluster_root:
-                break
-
-class PushTask(gdb.Command):
-    """Switch to a different task using task's address"""
-    usage_msg = 'pushtask <task_address>'
-
+    usage_msg = """
+    task                            : print all the tasks in a program
+    task <task_address>             : context switch to a different task at address @task_address
+    task <clusterName>              : print all the tasks in @clusterName
+    task <clusterName> <task_id>    : context switch to a different task with an id
+                                      @task_id and in cluster @clusterName
+    """
     def __init__(self):
         # The first parameter of the line below is the name of the command. You
-        # can call it 'uc++ pushtask'
-        super(PushTask, self).__init__('pushtask', gdb.COMMAND_USER)
+        # can call it 'uc++ task'
+        super(Task, self).__init__('task', gdb.COMMAND_USER)
 
-    def invoke(self, arg, from_tty):
-        """Change to a new task by switching to a different stack and manually
-        adjusting sp, fp and pc"""
-        if not arg:
-            print_usage(self.usage_msg)
-            return
-
-        args = arg.split(' ')
-        if len(args) > 1:
-            print_usage(self.usage_msg)
-            return
-
-        # convert hex string to hex number
-        try:
-            hex_addr = int(arg, 16)
-        except:
-            print_usage(self.usage_msg)
-            return
-
-        uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
-        task_address = gdb.Value(hex_addr)
-
-        task = task_address.cast(uBaseTask_ptr_type)
-        task_state = (
-            str(task_address.cast(uBaseTask_ptr_type)['state']).split('::', 1)[-1]
-        )
-
-        if task_state == 'Terminate':
-            print('Cannot switch to a terminated thread')
-            return
-
-        task_context = task['context'].cast(uContext_t_ptr_type)
-
-
-        # lookup for sp,fp and uSwitch
-        xsp = task_context['SP'] + 48
-        xfp = task_context['FP']
-        if not gdb.lookup_symbol('uSwitch'):
-            print('uSwitch symbol is not available')
-            return
-
-        # convert string so we can strip out the address
-        xpc = get_addr(gdb.parse_and_eval('uSwitch').address + 28, 'PC')
-
-        # must be at frame 0 to set pc register
-        gdb.execute('select-frame 0')
-
-        # push sp, fp, pc into a global stack
-        global STACK
-        sp = gdb.parse_and_eval('$sp')
-        fp = gdb.parse_and_eval('$fp')
-        pc = gdb.parse_and_eval('$pc')
-        stack_info = StackInfo(sp = sp, fp = fp, pc = pc)
-        STACK.append(stack_info)
-
-        # updater registers for new task
-        gdb.execute('set $rsp={}'.format(xsp))
-        gdb.execute('set $rbp={}'.format(xfp))
-        gdb.execute('set $pc={}'.format(xpc))
-
-class PopTask(gdb.Command):
-    """Switch back to previous task on the stack"""
-    usage_msg = 'poptask <task_address>'
-
-    def __init__(self):
-        super(PopTask, self).__init__('poptask', gdb.COMMAND_USER)
-
-    def invoke(self, arg, from_tty):
-        global STACK
-        if len(STACK) != 0:
-            # must be at frame 0 to set pc register
-            gdb.execute('select-frame 0')
-
-            # pop stack
-            stack_info = STACK.pop()
-            pc = get_addr(stack_info.pc, 'PC')
-            sp = stack_info.sp
-            fp = stack_info.fp
-
-            # pop sp, fp, pc from global stack
-            gdb.execute('set $pc = {}'.format(pc))
-            gdb.execute('set $rbp = {}'.format(fp))
-            gdb.execute('set $sp = {}'.format(sp))
-
-            # must be at C++ frame to access C++ vars
-            gdb.execute('frame 1')
-        else:
-            print('empty stack')
-
-class PushTaskID(gdb.Command):
-    """Switch to a different task using task id"""
-    usage_msg = 'pushtask_id <task_id> [cluster_id]'
-    def __init__(self):
-        super(PushTaskID, self).__init__('pushtask_id', gdb.COMMAND_USER)
-
+    ############################AUXILIARY FUNCTIONS#########################
     def lookup_cluster(self, cluster_id):
+        """
+        Look up a cluster given its ID
+        @cluster_id: str
+        """
         curr_id = 0
 
         cluster_root = get_cluster_root()
@@ -324,14 +191,90 @@ class PushTaskID(gdb.Command):
                 )
         return cluster
 
-    def invoke(self, arg, from_tty):
-        if not arg:
+    ############################COMMAND FUNCTIONS#########################
+    def print_all_tasks(self):
+        """Iterate through each cluster, iterate through all tasks and  print out info about all the tasks
+        in those clusters"""
+        cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
+        if cluster_root is None:
+            print('uKernelModule::globalClusters list is None')
+            return
+
+        curr = cluster_root
+        print('{:>20}{:>18}'.format('Cluster Name', 'Address'))
+
+        while True:
+            addr = str(curr['cluster_'].reference_value())[1:]
+            print(
+                    ('{:>20}{:>18}'.format(curr['cluster_']['name'].string(),
+                        addr))
+                )
+
+            self.print_task_by_cluster_name(addr)
+            curr = curr['next'].cast(uClusterDL_ptr_type)
+            if curr == cluster_root:
+                break
+
+    def pushtask_by_address(self, task_address):
+        """Change to a new task by switching to a different stack and manually
+        adjusting sp, fp and pc
+        @task_address: str in hex format
+        """
+
+        # convert hex string to hex number
+        try:
+            hex_addr = int(task_address, 16)
+        except:
             print_usage(self.usage_msg)
             return
 
-        args = arg.split(' ')
+        uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
+        task_address = gdb.Value(hex_addr)
+
+        task = task_address.cast(uBaseTask_ptr_type)
+        task_state = (
+            str(task_address.cast(uBaseTask_ptr_type)['state']).split('::', 1)[-1]
+        )
+
+        if task_state == 'Terminate':
+            print('Cannot switch to a terminated thread')
+            return
+
+        task_context = task['context'].cast(uContext_t_ptr_type)
+
+        # lookup for sp,fp and uSwitch
+        xsp = task_context['SP'] + 48
+        xfp = task_context['FP']
+        if not gdb.lookup_symbol('uSwitch'):
+            print('uSwitch symbol is not available')
+            return
+
+        # convert string so we can strip out the address
+        xpc = get_addr(gdb.parse_and_eval('uSwitch').address + 28, 'PC')
+
+        # must be at frame 0 to set pc register
+        gdb.execute('select-frame 0')
+
+        # push sp, fp, pc into a global stack
+        global STACK
+        sp = gdb.parse_and_eval('$sp')
+        fp = gdb.parse_and_eval('$fp')
+        pc = gdb.parse_and_eval('$pc')
+        stack_info = StackInfo(sp = sp, fp = fp, pc = pc)
+        STACK.append(stack_info)
+
+        # updater registers for new task
+        gdb.execute('set $rsp={}'.format(xsp))
+        gdb.execute('set $rbp={}'.format(xfp))
+        gdb.execute('set $pc={}'.format(xpc))
+
+    def pushtask_by_id(self, cluster_name, task_id):
+        """
+        @cluster_name: str
+        @task_id: str
+        """
         try:
-            task_id = int(args[0])
+            task_id = int(task_id)
         except:
             print_usage(self.usage_msg)
             return
@@ -395,7 +338,92 @@ class PushTaskID(gdb.Command):
                     ("Can't find task ID: {}. Only have {} tasks".format(task_id,curr_id))
                 )
         else:
-            PushTask().invoke(task_addr, False)
+            pushtask_by_address(task_addr)
+
+    def print_task_by_cluster_name(self, cluster_name):
+        """Display a list of all info about all available tasks on a particular
+        cluster"""
+        # Iterate through a circular linked list of tasks and print out its
+        # name along with address associated to each cluster
+
+        # convert hex string to hex number
+        try:
+            hex_addr = int(cluster_name, 16)
+        except:
+            print_usage(self.usage_msg)
+            return
+
+        cluster_address = gdb.Value(hex_addr)
+
+        task_root = (
+            cluster_address.cast(uCluster_ptr_type)['tasksOnCluster']['root']
+            )
+
+        if task_root is None:
+            print('There is no tasks for cluster at address: \
+                    {}'.format(cluster_address))
+            return
+
+        print('{:>4}{:>20}{:>18}{:>25}'.format('ID', 'Task Name', 'Address', 'State'))
+        curr = task_root
+        task_id = 0
+
+        while True:
+            print(
+                    ('{:>4}{:>20}{:>18}{:>25}'.format(task_id, curr['task_']['name'].string(),
+                    str(curr['task_'].reference_value())[1:],
+                    str(curr['task_']['state']))
+                )
+            )
+
+            curr = curr['next'].cast(uBaseTaskDL_ptr_type)
+            task_id += 1
+            if curr == task_root:
+                break
+
+    def invoke(self, arg, from_tty):
+        argv = get_argv_list(arg)
+        if len(argv) == 0:
+            self.print_all_tasks()
+        elif len(argv) == 1:
+            # pushtask with an address
+            if argv[0].startswith('0x'):
+                self.pushtask_by_address(argv[0])
+            else:
+                self.print_task_by_cluster_name(argv[0])
+        elif len(argv) == 2:
+            self.pushtask_by_id(argv[0], argv[1])
+        else:
+            print_usage(self.usage_msg)
+
+class PopTask(gdb.Command):
+    """Switch back to previous task on the stack"""
+    usage_msg = 'poptask <task_address>'
+
+    def __init__(self):
+        super(PopTask, self).__init__('poptask', gdb.COMMAND_USER)
+
+    def invoke(self, arg, from_tty):
+        global STACK
+        if len(STACK) != 0:
+            # must be at frame 0 to set pc register
+            gdb.execute('select-frame 0')
+
+            # pop stack
+            stack_info = STACK.pop()
+            pc = get_addr(stack_info.pc, 'PC')
+            sp = stack_info.sp
+            fp = stack_info.fp
+
+            # pop sp, fp, pc from global stack
+            gdb.execute('set $pc = {}'.format(pc))
+            gdb.execute('set $rbp = {}'.format(fp))
+            gdb.execute('set $sp = {}'.format(sp))
+
+            # must be at C++ frame to access C++ vars
+            gdb.execute('frame 1')
+        else:
+            print('empty stack')
 
 class ResetOriginFrame(gdb.Command):
     """Reset to the origin frame prior to continue execution again"""
@@ -420,10 +448,7 @@ class ResetOriginFrame(gdb.Command):
         gdb.execute('frame 1')
 
 Clusters()
-ClusterProcs()
-ClusterTasks()
+ClusterProcessors()
 PopTask()
-PushTask()
-PushTaskID()
 ResetOriginFrame()
-Tasks()
+Task()
