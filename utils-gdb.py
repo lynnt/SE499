@@ -195,6 +195,8 @@ class PushTask(gdb.Command):
     usage_msg = 'pushtask <task_address>'
 
     def __init__(self):
+        # The first parameter of the line below is the name of the command. You
+        # can call it 'uc++ pushtask'
         super(PushTask, self).__init__('pushtask', gdb.COMMAND_USER)
 
     def invoke(self, arg, from_tty):
