@@ -19,5 +19,6 @@ Or simplier solution:
 * task
 * task <cluster_name>
 * task <task_address>
+* task <task_name>
 * task <cluster_name> <task_id>
 * poptask

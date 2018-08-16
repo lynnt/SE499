@@ -71,29 +71,17 @@ def lookup_cluster_by_name(cluster_name):
     """
     Look up a cluster given its ID
     @cluster_name: str
-        "cluster_name": literal string name of the cluster
-            Ex: "userCluster"
-        cluster_name: pointer of the variable name of the cluster
-            Ex: uCluster* s -> cluster_name = s
     Return: gdb.Value
     """
     cluster_root = get_cluster_root()
     if not cluster_root:
         print('Cannot get the root of the linked list of clusters')
         return
-      
-    # Cluster name has a format "cluster_name", which implies that it is the actual name
-    if cluster_name.startswith('"') and cluster_name.endswith('"'):
-        cluster = lookup_cluster_by_str_name(cluster_name)
-    else:
-    # Cluster name format does not include the quotation marks, which implies
-    # that it is a variable name
-        # evaluate cluster_name by gdb
-        cluster = gdb.parse_and_eval(cluster_name)
-        cluster_name = cluster['name']
-
     cluster = None
-    
+    # need to keep track of the count to be able to tell if there are many tasks
+    # with the same name
+    cluster_count = 0
+
     # lookup for the task associated with the id
     if cluster_root['cluster_']['name'].string() == cluster_name:
         cluster = cluster_root['cluster_'].address
@@ -294,23 +282,35 @@ class Task(gdb.Command):
     def pushtask_by_address(self, task_address):
         """Change to a new task by switching to a different stack and manually
         adjusting sp, fp and pc
-        @task_address: str in hex format
+        @task_address: str
+            2 supported format:
+                in hex format
+                    <hex_address>: literal hexadecimal address
+                    Ex: 0xffffff
+                in name of the pointer to the task
+                    "task_name": pointer of the variable name of the cluster
+                        Ex: T* s -> task_name = s
+            Return: gdb.value of the cluster's address
         """
-
-        # convert hex string to hex number
-        try:
-            hex_addr = int(task_address, 16)
-        except:
-            print_usage(self.usage_msg)
-            return
+        # Task address has a format "task_address", which implies that it is the
+        # name of the variable, and it needs to be evaluated
+        if task_address.startswith('"') and task_address.endswith('"'):
+            task = gdb.parse_and_eval(task_address.replace('"', ''))
+        else:
+        # Task address format does not include the quotation marks, which implies
+        # that it is a hex address
+            # convert hex string to hex number
+            try:
+                hex_addr = int(task_address, 16)
+            except:
+                print_usage(self.usage_msg)
+                return
+            task_address = gdb.Value(hex_addr)
+            task = task_address.cast(uBaseTask_ptr_type)
 
         uContext_t_ptr_type = gdb.lookup_type('UPP::uMachContext::uContext_t').pointer()
-        task_address = gdb.Value(hex_addr)
 
-        task = task_address.cast(uBaseTask_ptr_type)
-        task_state = (
-            str(task_address.cast(uBaseTask_ptr_type)['state']).split('::', 1)[-1]
-        )
+        task_state = task['state']
 
         if task_state == 'Terminate':
             print('Cannot switch to a terminated thread')
@@ -415,7 +415,7 @@ class Task(gdb.Command):
             self.print_all_tasks()
         elif len(argv) == 1:
             # pushtask with an address
-            if argv[0].startswith('0x'):
+            if argv[0].startswith('0x') or argv[0].startswith('"'):
                 self.pushtask_by_address(argv[0])
             else:
                 self.print_tasks_by_cluster_name(argv[0])

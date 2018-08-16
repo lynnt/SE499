@@ -17,15 +17,19 @@ _Task T {
     }
 };
 
-const int n = 10;
-T* tasks[n];
 T* global_ptr_S;
+uCluster* global_cluster;
 
 int main() {
     uProcessor p[3];
+    const int n = 10;
+    T* tasks[n];
+    uCluster fred( "fred"  );
+    global_cluster = &fred;
+
     for (int i = 0; i < n; i += 1) {
         tasks[i] = new T(i);
-        global_ptr_S = tasks[0];
+        global_ptr_S = tasks[1];
     }
 
     for (int i = 0; i < n; i += 1) {
