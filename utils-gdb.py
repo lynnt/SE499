@@ -63,8 +63,8 @@ def get_cluster_root():
     Return: gdb.Value of globalClusters.root (is an address)
     """
     cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
-    if cluster_root is None:
-        print('uKernelModule::globalClusters list is None')
+    if cluster_root == 0x0:
+        print('uKernelModule::globalClusters list is null')
     return cluster_root
 
 def lookup_cluster_by_name(cluster_name):
@@ -158,9 +158,8 @@ class ClusterProcessors(gdb.Command):
             cluster_address.cast(uCluster_ptr_type)['processorsOnCluster']['root']
             )
 
-        if processor_root is None:
-            print('There is no processor for cluster at address: \
-                    {}'.format(cluster_address))
+        if processor_root == 0x0:
+            print('There is no processor for cluster at address: {}'.format(cluster_address))
             return
 
         uProcessorDL_ptr_type = gdb.lookup_type('uProcessorDL').pointer()
@@ -210,13 +209,15 @@ class Task(gdb.Command):
         cluster
         @cluster_address: gdb.Value
         """
+        cluster_address = cluster_address.cast(uCluster_ptr_type)
         task_root = (
-            cluster_address.cast(uCluster_ptr_type)['tasksOnCluster']['root']
+            cluster_address['tasksOnCluster']['root']
             )
 
-        if task_root is None:
-            print('There is no tasks for cluster at address: \
-                    {}'.format(cluster_address))
+        if task_root == 0x0:
+            print(
+                'There is no tasks for cluster at address: {}'.format(cluster_address)
+                )
             return
 
         print('{:>4}{:>20}{:>18}{:>25}'.format('ID', 'Task Name', 'Address', 'State'))
@@ -260,8 +261,8 @@ class Task(gdb.Command):
         """Iterate through each cluster, iterate through all tasks and  print out info about all the tasks
         in those clusters"""
         cluster_root = gdb.parse_and_eval('uKernelModule::globalClusters.root')
-        if cluster_root is None:
-            print('uKernelModule::globalClusters list is None')
+        if cluster_root is 0x0:
+            print('uKernelModule::globalClusters list is null')
             return
 
         curr = cluster_root
@@ -364,8 +365,8 @@ class Task(gdb.Command):
             cluster_address.cast(uCluster_ptr_type)['tasksOnCluster']['root']
             )
 
-        if not task_root:
-            print('tasksOnCluster list is None')
+        if task_root == 0x0:
+            print('tasksOnCluster list is null')
             return
 
         curr_id = 0
