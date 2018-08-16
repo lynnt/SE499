@@ -78,9 +78,6 @@ def lookup_cluster_by_name(cluster_name):
         print('Cannot get the root of the linked list of clusters')
         return
     cluster = None
-    # need to keep track of the count to be able to tell if there are many tasks
-    # with the same name
-    cluster_count = 0
 
     # lookup for the task associated with the id
     if cluster_root['cluster_']['name'].string() == cluster_name:
