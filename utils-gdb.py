@@ -71,14 +71,28 @@ def lookup_cluster_by_name(cluster_name):
     """
     Look up a cluster given its ID
     @cluster_name: str
+        "cluster_name": literal string name of the cluster
+            Ex: "userCluster"
+        cluster_name: pointer of the variable name of the cluster
+            Ex: uCluster* s -> cluster_name = s
     Return: gdb.Value
     """
     cluster_root = get_cluster_root()
     if not cluster_root:
         print('Cannot get the root of the linked list of clusters')
         return
-    cluster = None
 
+    # Cluster name has a format "cluster_name", which implies that it is the actual name
+    if cluster_name.startswith('"') and cluster_name.endswith('"'):
+        cluster = lookup_cluster_by_str_name(cluster_name)
+    else:
+    # Cluster name format does not include the quotation marks, which implies
+    # that it is a variable name
+        # evaluate cluster_name by gdb
+        cluster = gdb.parse_and_eval(cluster_name)
+        cluster_name = cluster['name']
+
+    cluster = None
     # lookup for the task associated with the id
     if cluster_root['cluster_']['name'].string() == cluster_name:
         cluster = cluster_root['cluster_'].address
