@@ -1,37 +1,34 @@
+#include <string>
+
 _Task T {
-    void a() {
-        //for (int i = 0; i < 100000000000; i++);
-        while (1);
+    std::string name;
+    void a(int param) {
+        int x = 3;
+        std::string y = "example";
+        while(1);
     }
     void main() {
-        a();
+        a(5);
     }
   public:
-    T() {}
-    T( const char * name, uCluster & x ) : uBaseTask( x ) { setName( name ); }
+    T( const int tid) {
+        name = "T" + std::to_string(tid);
+        setName( name.c_str() );
+    }
 };
+
+const int n = 10;
+T* tasks[n];
+T* global_ptr_S;
 
 int main() {
     uProcessor p[3];
-    int n = 10;
-    T s[n];
-    /*
-    {
-    }
-    uCluster fred( "fred" );
-    uProcessor jane( fred );
-    T* p[n];
     for (int i = 0; i < n; i += 1) {
-        p[i] = new T("jack", fred);
+        tasks[i] = new T(i);
+        global_ptr_S = tasks[0];
     }
 
     for (int i = 0; i < n; i += 1) {
-        delete p[i];
+        delete tasks[i];
     }
-    uProcessor p[3];
-    {
-        T p[3];
-        //T jack( "jack", fred );
-    }
-    */
 } // main
