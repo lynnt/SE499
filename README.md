@@ -15,9 +15,9 @@ Or simplier solution:
 
 ## List of commands
 * clusters
-* cluster_procs <cluster_address>
-* cluster_tasks <cluster_address>
-* tasks
-* pushtask <address>
-* pushtask_id <id> [cluster_id]
+* processors <cluster_name>
+* task
+* task <cluster_name>
+* task <task_address>
+* task <cluster_name> <task_id>
 * poptask
