@@ -81,7 +81,7 @@ def lookup_cluster_by_name(cluster_name):
     if not cluster_root:
         print('Cannot get the root of the linked list of clusters')
         return
-
+      
     # Cluster name has a format "cluster_name", which implies that it is the actual name
     if cluster_name.startswith('"') and cluster_name.endswith('"'):
         cluster = lookup_cluster_by_str_name(cluster_name)
@@ -93,6 +93,7 @@ def lookup_cluster_by_name(cluster_name):
         cluster_name = cluster['name']
 
     cluster = None
+    
     # lookup for the task associated with the id
     if cluster_root['cluster_']['name'].string() == cluster_name:
         cluster = cluster_root['cluster_'].address
