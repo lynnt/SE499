@@ -150,6 +150,8 @@ class ClusterProcessors(gdb.Command):
             return
 
         cluster_address = lookup_cluster_by_name(argv[0])
+        if cluster_address is None:
+            return
 
         processor_root = (
             cluster_address.cast(uCluster_ptr_type)['processorsOnCluster']['root']
